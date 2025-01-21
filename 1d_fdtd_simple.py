@@ -4,6 +4,7 @@ import classes
 import logging
 import matplotlib.pyplot as plt
 from classes.constants import *
+from classes.fdtd import time_stepping_1d
 from matplotlib.animation import FuncAnimation
 
 ## Parameters
@@ -35,6 +36,9 @@ ratio_deltas_div_epsilon = ratio_deltas/epsilon
 indx_src = int(50e-3/delta_x)
 logging.info(f"Index of Source is:{indx_src}")
 
+## Running Logic
+MODE = "P" ## "P" -> Plot "S" -> Save
+
 #Set Plot
 fig, ax = plt.subplots()
 E_field_graph, = ax.plot(x,E, label="E field")
@@ -43,30 +47,18 @@ ax.set_ylim(-0.7, 0.7)
 time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes, fontsize=12, color='red')
 ax.legend()
 
-def time_stepping(t):
-    global E, H, ratio_deltas_div_miu, ratio_deltas_div_epsilon, indx_src
-
-    logging.info(f"Update at t:{t}")
-    ## update magnetic field
-    ## H(x+1/2,t+1/2) = H(x+1/2,t+1/2) + [delta_t/(miu*delta_x)] (E(x+1,t)-E(x,t))
-    ## calculate E(x+1,t)
-    ## left shift E and append zero at the end
-    E_shift_left = np.concatenate((E[1:], np.zeros(1,dtype=E.dtype))) 
-    H = H + np.multiply(ratio_deltas_div_miu, (E_shift_left - E))
-    H[-1] = 0 ## set last node to zero 
-
-    ## update E1
-    ##E(x,t+1) = E(x,t) + [delta_t/(epsilon*delta_x)](H(x+1/2, t+1/2) - H(x-1/2, t+1/2))
-    ## right shift H (just updated) and append zero at the beginning
-    H_shift_right = np.concatenate((np.zeros(1,dtype=H.dtype), H[:-1]))
-    E = E + np.multiply(ratio_deltas_div_epsilon,(H - H_shift_right))
-    E[0] = 0 ## set first node to zero
-
-    ## add source term
-    E[indx_src] = E[indx_src] + np.sin(2*np.pi*f_src*t)
+def update(t):
+    global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src
+    args = {"e_field":E, 
+            "h_field": H, 
+            "del_miu":ratio_deltas_div_miu, 
+            "del_eps":ratio_deltas_div_epsilon, 
+            "idx_j":indx_src,
+            "f_src":f_src}
+    
+    E,H = time_stepping_1d(t, args)
     E_field_graph.set_ydata(E)
     H_field_graph.set_ydata(imp_free_space*H)
-
     time_text.set_text(f't = {t*1e12:.2f} ps')
     return E_field_graph,H_field_graph, time_text
 
@@ -76,6 +68,10 @@ if __name__=="__main__":
     logging.info("Starting 1D FDTD simulation")
     logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_t) + 1}")
 
+    
+    ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
-    ani = FuncAnimation(fig, time_stepping, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
-    ani.save('sims/1D_simple_no_end.gif', writer="imagemagick", fps=30)
+    if MODE=="S":
+        ani.save('sims/1D_simple_no_end.gif', writer="imagemagick", fps=30)
+    else:
+        plt.show()
