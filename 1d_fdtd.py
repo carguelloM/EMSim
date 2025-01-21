@@ -7,25 +7,80 @@ from classes.constants import *
 
 
 ## Parameters
-f = 5e9 ## 5 GHz
+f_sampling = 10e12 ## 100 THz
+f_src = 30e9 ## 30 GHz 
 x_max = 100e-3 ## 100 mm 
 t_max = 100e-12 ## 100 ps
-delta_t = (3/f) ## 3f to satisfy Nyquist
-Sc = 0.9 ## Courant number
-delta_x = c*delta_t* Sc 
-
+delta_t = (1/f_sampling)
+Sc = 1 ## Courant number
+delta_x = (c*delta_t)/Sc 
+ratio_deltas = delta_t/delta_x
+e_r = 1
+u_r = 1
 
 ## Vectors
 x = np.arange(0,x_max, delta_x)
-epsilon = np.ones(len(x))
-miu = np.ones(len(x))
+epsilon = np.ones(len(x)) * permiti_free_space * e_r
+miu = np.ones(len(x)) * premea_freee_space * u_r
 E = np.zeros(len(x))
 H = np.zeros(len(x))
+print(len(x))
+print(round(x_max/delta_x))
+
 
 if __name__=="__main__":
     ## setup logging
     classes.setup_log()
     logging.info("Starting 1D FDTD simulation")
-    logging.info(f"delta_t: {delta_t}, delta_x: {delta_x}")
+    logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t)} \n delta_x: {delta_x} - #steps:{round(x_max/delta_t)}")
+
+    #Set Plot
+    plt.ion()
+    fig, ax = plt.subplots()
+    line, = ax.plot(x,E)
+    ax.set_ylim(-1.5, 1.5)
+    
+    ## one time vectors calc
+    ratio_deltas_div_miu = ratio_deltas/miu
+    ratio_deltas_div_epsilon = ratio_deltas/epsilon
+
+    ## source should be a 50 mm, need to get index
+    indx_src = int(50e-3/delta_x)
+    logging.info(f"Index of Source is:{indx_src}")
+ 
+    ## iterate through time
+    for t in np.arange(0, t_max , delta_t):
+        logging.info(f"Update at t:{t}")
+        ## update magnetic field
+        ## H(x+1/2,t+1/2) = H(x+1/2,t+1/2) + [delta_t/(miu*delta_x)] (E(x+1,t)-E(x,t))
+
+        ## calculate E(x+1,t)
+        ## left shift E and append zero at the end
+        E_shift_left = np.concatenate((E[1:], np.zeros(1,dtype=E.dtype))) 
+        H = H + np.multiply(ratio_deltas_div_miu, (E_shift_left - E))
+        H[-1] = 0 ## set last node to zero 
+
+        ## update E1
+        ##E(x,t+1) = E(x,t) + [delta_t/(epsilon*delta_x)](H(x+1/2, t+1/2) - H(x-1/2, t+1/2))
+
+        ## right shift H (just updated) and append zero at the beginning
+        H_shift_right = np.concatenate((np.zeros(1,dtype=H.dtype), H[:-1]))
+        E = E + np.multiply(ratio_deltas_div_epsilon,(H - H_shift_right))
+        E[0] = 0 ## set first node to zero
+
+        ## source term
+        E[indx_src] = E[indx_src] + np.sin(2*np.pi*f_src*t)
+
+        # update plot
+        line.set_ydata(E)
+        plt.draw()
+        plt.pause(0.1)
+   
+    plt.ioff()
+    plt.show()
+
+
+
+
 
 
