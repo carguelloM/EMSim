@@ -25,5 +25,6 @@ def time_stepping_1d(t, args):
     E[0] = 0 ## set first node to zero
 
     ## add source term
-    E[indx_src] = E[indx_src] + np.sin(2*np.pi*args["f_src"]*t)
+    E[indx_src] = E[indx_src] + args["del_t"]/args["eps"][indx_src]*np.sin(2*np.pi*args["f_src"]*t)
+
     return E, H

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from classes.constants import *
 from classes.fdtd import time_stepping_1d
 from matplotlib.animation import FuncAnimation
+import argparse
 
 ## Parameters
 f_sampling = 5e12 ## 100 THz
@@ -27,6 +28,9 @@ E = np.zeros(len(x))
 H = np.zeros(len(x))
 
 
+## impedance vector for multiplication with H (for scaling)
+z=np.divide(miu, epsilon)
+z=np.sqrt(z)
 
 ## ONE-TIME calculation
 ratio_deltas_div_miu = ratio_deltas/miu
@@ -40,35 +44,49 @@ logging.info(f"Index of Source is:{indx_src}")
 MODE = "P" ## "P" -> Plot "S" -> Save
 
 #Set Plot
+y_range = (-2e-2, 2e-2)
 fig, ax = plt.subplots()
 E_field_graph, = ax.plot(x,E, label="E field")
-H_field_graph, = ax.plot(x,imp_free_space*H, label="H*377 field", linestyle='--')
-ax.set_ylim(-0.7, 0.7)
+H_field_graph, = ax.plot(x,np.multiply(z,H), label="z*H field", linestyle='--')
+ax.set_ylim(y_range[0], y_range[1])
 time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes, fontsize=12, color='red')
 ax.legend()
 
 def update(t):
-    global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src
+    global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src, MODE
     args = {"e_field":E, 
-            "h_field": H, 
-            "del_miu":ratio_deltas_div_miu, 
-            "del_eps":ratio_deltas_div_epsilon, 
-            "idx_j":indx_src,
-            "f_src":f_src}
+        "h_field": H, 
+        "del_miu":ratio_deltas_div_miu, 
+        "del_eps":ratio_deltas_div_epsilon, 
+        "idx_j":indx_src,
+        "f_src":f_src,
+        "del_t":delta_t,
+        "eps":epsilon}
     
     E,H = time_stepping_1d(t, args)
     E_field_graph.set_ydata(E)
-    H_field_graph.set_ydata(imp_free_space*H)
+    H_field_graph.set_ydata(np.multiply(z,H))
     time_text.set_text(f't = {t*1e12:.2f} ps')
     return E_field_graph,H_field_graph, time_text
 
 if __name__=="__main__":
+    ## Argument parsing
+    parser = argparse.ArgumentParser(description="1D Simulation EM Wave in Free Space.")
+    parser.add_argument("--mode", type=str, help="S(Save) & P(Print)")
+    args = parser.parse_args()
+    if(args.mode != 'S' and args.mode != 'P'):
+        print("Error: Invalid Operation Mode")
+        exit(-1)
+    
+    MODE = args.mode
+
     ## setup logging
     classes.setup_log()
     logging.info("Starting 1D FDTD simulation")
     logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_t) + 1}")
 
     
+
     ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
     if MODE=="S":
