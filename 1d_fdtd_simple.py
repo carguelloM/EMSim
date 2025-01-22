@@ -2,9 +2,9 @@
 import numpy as np
 import classes
 import logging
-import matplotlib.pyplot as plt
 from classes.constants import *
 from classes.fdtd import time_stepping_1d
+import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import argparse
 
@@ -38,7 +38,7 @@ ratio_deltas_div_epsilon = ratio_deltas/epsilon
 
 ## source should be a 50 mm, need to get index
 indx_src = int(50e-3/delta_x)
-logging.info(f"Index of Source is:{indx_src}")
+
 
 ## Running Logic
 MODE = "P" ## "P" -> Plot "S" -> Save
@@ -46,12 +46,13 @@ MODE = "P" ## "P" -> Plot "S" -> Save
 #Set Plot
 y_range = (-2e-2, 2e-2)
 fig, ax = plt.subplots()
-E_field_graph, = ax.plot(x,E, label="E field")
-H_field_graph, = ax.plot(x,np.multiply(z,H), label="z*H field", linestyle='--')
+E_field_graph, = ax.plot(x*1e3,E, label="E field")
+H_field_graph, = ax.plot(x*1e3,np.multiply(z,H), label="z*H field", linestyle='--')
 ax.set_ylim(y_range[0], y_range[1])
 time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes, fontsize=12, color='red')
 ax.legend()
-
+ax.set_xlabel("Distance [mm]")
+ax.set_ylabel("Amplitude")
 def update(t):
     global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src, MODE
     args = {"e_field":E, 
@@ -84,12 +85,15 @@ if __name__=="__main__":
     classes.setup_log()
     logging.info("Starting 1D FDTD simulation")
     logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_t) + 1}")
-
+    logging.info(f"Index of Source is:{indx_src}")
+    
     
 
     ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
     if MODE=="S":
         ani.save('sims/1D_simple_no_end.gif', writer="imagemagick", fps=30)
+        logging.info("Animation saved to sims/1D_simple_no_end.gif")
     else:
         plt.show()
+    logging.info("Program Finished")
