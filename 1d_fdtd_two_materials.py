@@ -24,6 +24,8 @@ u_r = 1
 x = np.arange(0,x_max+delta_x, delta_x)
 epsilon = np.ones(len(x)) * permiti_free_space * e_r
 miu = np.ones(len(x)) * premea_freee_space * u_r
+sigma_e = np.zeros(len(x))
+sigma_m = np.zeros(len(x))
 E = np.zeros(len(x))
 H = np.zeros(len(x))
 
@@ -39,8 +41,17 @@ z=np.divide(miu, epsilon)
 z=np.sqrt(z)
 
 ## ONE-TIME calculation
-ratio_deltas_div_miu = ratio_deltas/miu
-ratio_deltas_div_epsilon = ratio_deltas/epsilon
+## Coefficient ONE update to electric field 1- sigma_e*delta_t/(2*epsilon) / 1+sigma_e*delta_t/(2*epsilon)
+C1e = np.divide(1-np.divide(sigma_e*delta_t,(2*epsilon)), 1+np.divide(sigma_e*delta_t,(2*epsilon)))
+
+## Coeffient TWO update to electric field delta_t/(epsilon*delta_x) / 1+sigma_e*delta_t/(2*epsilon)
+C2e = np.divide(delta_t/(epsilon*delta_x), 1 + np.divide(sigma_e*delta_t, (2*epsilon))) 
+
+## Coeffiecnet ONE update to magnetic field 1-sigma_m*delta_t/(2*miu) / 1+sigma_m*delta_t/(2*miu)
+C1m = np.divide(1-np.divide(sigma_m*delta_t,(2*miu)), 1+np.divide(sigma_m*delta_t,(2*miu)))
+
+## Coefficient TWO update to magnetic field delta_t/(miu*delta_x) / 1+sigma_m*delta_t/(2*miu)
+C2m = np.divide(delta_t/(miu*delta_x), 1 + np.divide(sigma_m*delta_t, (2*miu)))
 
 ## source should be a 50 mm, need to get index
 indx_src = round(50e-3/delta_x)
@@ -64,8 +75,10 @@ def update(t):
     global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src, MODE
     args = {"e_field":E, 
             "h_field": H, 
-            "del_miu":ratio_deltas_div_miu, 
-            "del_eps":ratio_deltas_div_epsilon, 
+            "C1e":C1e,
+            "C2e":C2e,
+            "C1m":C1m,
+            "C2m":C2m,
             "idx_j":indx_src,
             "f_src":f_src,
             "del_t":delta_t,
