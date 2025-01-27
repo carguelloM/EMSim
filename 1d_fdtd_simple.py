@@ -5,7 +5,7 @@ import logging
 from classes.constants import *
 from classes.fdtd import time_stepping_1d
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 import argparse
 
 ## Parameters
@@ -73,41 +73,43 @@ z=np.sqrt(z)
 ## Running Logic
 MODE = "P" ## "P" -> Plot "S" -> Save
 
+## Animation Name
+## Note this input must be acquired before simulation look
+## otherwise frames get stacked (i guess because they arent process while waiting for input?)
+name = input("Name for simulation:")
+fn = "sims/"+ name + ".gif"
 
 #Set Plot
 y_range = (-2e-2, 2e-2)
-fig, ax = plt.subplots(dpi=100)
+fig, ax = plt.subplots()
 E_field_graph, = ax.plot(x*1e3,E, label="E field")
 H_field_graph, = ax.plot(x*1e3,np.multiply(z,H), label="z*H field", linestyle='--')
 ax.set_ylim(y_range[0], y_range[1])
 time_text = ax.text(0.5, 0.9, '', transform=ax.transAxes, fontsize=12, color='red')
 ax.legend()
+ax.set_xlabel("Distance [mm]")
 ax.fill_between(x[:PML_SIZE]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
 ax.fill_between(x[-PML_SIZE:]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
-ax.set_xlabel("Distance [mm]")
 ax.set_ylabel("Amplitude")
-fig.set_tight_layout(False)  # Disable automatic tight layout adjustments
 
 def update(t):
-    global E,H, ratio_deltas_div_epsilon, ratio_deltas_div_miu, indx_src, f_src, MODE
-    args = {"e_field":E, 
-        "h_field": H, 
-        "C1e":C1e, 
-        "C2e":C2e, 
-        "C1m":C1m,
-        "C2m":C2m,
-        "idx_j":indx_src,
-        "f_src":f_src,
-        "del_t":delta_t,
-        "eps":epsilon}
-
-    E,H = time_stepping_1d(t, args)
-    if (int(t/delta_t)) % 10 == 0:
-        E_field_graph.set_ydata(E)
-        H_field_graph.set_ydata(np.multiply(z,H))
-        time_text.set_text(f't = {t*1e12:.2f} ps')
+   global E,H, indx_src, f_src, MODE
+   args = {"e_field":E, 
+            "h_field": H, 
+            "C1e":C1e,
+            "C2e":C2e,
+            "C1m":C1m,
+            "C2m":C2m,
+            "idx_j":indx_src,
+            "f_src":f_src,
+            "del_t":delta_t,
+            "eps":epsilon}
     
-    return E_field_graph,H_field_graph, time_text
+   E,H = time_stepping_1d(t, args)
+   E_field_graph.set_ydata(E)
+   H_field_graph.set_ydata(np.multiply(z,H))
+   time_text.set_text(f't = {t*1e12:.2f} ps')
+   return E_field_graph,H_field_graph, time_text
    
 
 if __name__=="__main__":
@@ -130,14 +132,11 @@ if __name__=="__main__":
     
     
 
-    ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=20, blit=True, repeat=False)
+    ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
     if MODE=="S":
-        dir = "sims/"
-        name = input("Animation Name:")
-        fn = dir+name+'.gif'
         ani.save(fn, writer="imagemagick", fps=30)
-        logging.info("Animation saved to sims/1D_simple_no_end.gif")
+        logging.info("Animation saved to" + fn)
     else:
         plt.show()
     logging.info("Program Finished")

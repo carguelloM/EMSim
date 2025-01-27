@@ -12,7 +12,7 @@ import argparse
 f_sampling = 5e12 ## 100 THz
 f_src = 30e9 ## 30 GHz 
 x_max = 100e-3 ## 100 mm 
-t_max = 100e-12 ## 100 ps
+t_max = 400e-12 ## 100 ps
 delta_t = (1/f_sampling)
 Sc = 1 ## Courant number
 delta_x = (c*delta_t)/Sc 
@@ -105,13 +105,13 @@ if __name__=="__main__":
     classes.setup_log()
     log = logging.getLogger("Program")
     log.info("Starting 1D FDTD simulation")
-    logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_t) + 1}")
+    logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_x) + 1}")
     logging.info(f"Index of Source is:{indx_src}")
 
     ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
     if MODE=="S":
-        ani.save('sims/1D_two_materials.gif', writer="imagemagick", fps=30)
+        ani.save('sims/test9.gif', writer="imagemagick", fps=30)
         logging.info("Animation saved to sims/1D_two_materials.gif")
     else:
         plt.show()
