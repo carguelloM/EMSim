@@ -73,11 +73,7 @@ z=np.sqrt(z)
 ## Running Logic
 MODE = "P" ## "P" -> Plot "S" -> Save
 
-## Animation Name
-## Note this input must be acquired before simulation look
-## otherwise frames get stacked (i guess because they arent process while waiting for input?)
-name = input("Name for simulation:")
-fn = "sims/"+ name + ".gif"
+
 
 #Set Plot
 y_range = (-2e-2, 2e-2)
@@ -87,9 +83,9 @@ H_field_graph, = ax.plot(x*1e3,np.multiply(z,H), label="z*H field", linestyle='-
 ax.set_ylim(y_range[0], y_range[1])
 time_text = ax.text(0.5, 0.9, '', transform=ax.transAxes, fontsize=12, color='red')
 ax.legend()
-ax.set_xlabel("Distance [mm]")
 ax.fill_between(x[:PML_SIZE]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
 ax.fill_between(x[-PML_SIZE:]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
+ax.set_xlabel("Distance [mm]")
 ax.set_ylabel("Amplitude")
 
 def update(t):
@@ -122,7 +118,13 @@ if __name__=="__main__":
         exit(-1)
     
     MODE = args.mode
-
+    
+    ## Animation Name
+    ## Note this input must be acquired before simulation look
+    ## otherwise frames get stacked (i guess because they arent process while waiting for input?)
+    if MODE == "S":
+        name = input("Name for simulation:")
+        fn = "sims/"+ name + ".gif"
     ## setup logging
     classes.setup_log()
     logging.info("Starting 1D FDTD simulation")
