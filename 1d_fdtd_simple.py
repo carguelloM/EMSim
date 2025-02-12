@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 import argparse
 
 ## Parameters
-f_sampling = 5e12 ## 100 THz
+f_sampling = 5e12 ## 5 THz
 f_src = 30e9 ## 30 GHz 
 x_max = 100e-3 ## 100 mm 
 t_max = 400e-12 ## 400 ps

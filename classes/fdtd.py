@@ -29,3 +29,37 @@ def time_stepping_1d(t, args):
     E[indx_src] = E[indx_src] + args["del_t"]/args["eps"][indx_src]*np.sin(2*np.pi*args["f_src"]*t)
 
     return E, H
+
+def time_stepping_2d(t, args):
+    E = args["e_field"]
+    Hx = args["h_fieldx"]
+    Hy = args["h_fieldy"]
+    Chxh = args["Chxh"]
+    Chxe = args["Chxe"]
+    Chyh = args["Chyh"]
+    Chye = args["Chye"]
+    Ceze = args["Ceze"]
+    Cezh = args["Cezh"]
+    idx_src_x = args["idx_src_x"]
+    idx_src_y = args["idx_src_y"]
+    print(E[idx_src_x+2, idx_src_y])
+    ## from Schneider book page 188 (code) -- Equation 8.10 in page 186
+    Hx[:,:-1] =  np.multiply(Chxh[:,:-1], Hx[:,:-1]) - np.multiply(Chxe[:, :-1],(E[:,1:] - E[:,:-1]))
+    ## set last column to zero
+    Hx[:,-1] = 0
+
+    ## from Schneider book page 188 (code) -- Equation 8.11 in page 186
+    Hy[:-1,:] = np.multiply(Chyh[:-1,:], Hy[:-1,:]) + np.multiply(Chye[:-1,:], (E[1:,:] - E[:-1,:]))
+    ## set last row to zero
+    Hy[-1,:] = 0
+
+    ## from Schneider book page 188 (code) -- Equation 8.12 in page 188
+    E[1:,1:] = np.multiply(Ceze[1:,1:], E[1:,1:]) + np.multiply(Cezh[1:,1:], ((Hy[1:,1:] - Hy[:-1,1:]) - (Hx[1:,1:] - Hx[1:,:-1])))
+    ## set first row and column to zero
+    E[1,:] = 0
+    E[:,1] = 0
+
+    ## add source term
+    E[idx_src_x, idx_src_y] =E[idx_src_x, idx_src_y] + args["del_t"]/args["eps"][idx_src_x, idx_src_y]*np.sin(2*np.pi*args["f_src"]*t)
+    
+    return E, Hx, Hy
