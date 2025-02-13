@@ -38,7 +38,8 @@ if __name__=="__main__":
                    'courant_num':1,
                    'max_time': 400e-12, ## 100 ps
                    'max_x': 100e-3, ## 100 mm
-                   'PML': True 
+                   'PML': True,
+                   'stride': 1
                    }
     myGrid = FDTD_GRID(grid_param)
 

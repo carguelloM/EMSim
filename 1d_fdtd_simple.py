@@ -16,6 +16,8 @@ Recipe to create a simulation
 6. Run the simulation
 '''
 if __name__=="__main__":
+    
+    classes.setup_log()
     ## Argument parsing
     parser = argparse.ArgumentParser(description="1D Simulation EM Wave in Free Space.")
     parser.add_argument("--mode", type=str, help="S(Save) & P(Print)")
@@ -38,7 +40,8 @@ if __name__=="__main__":
                    'courant_num':1,
                    'max_time': 100e-12, ## 100 ps
                    'max_x': 100e-3, ## 100 mm
-                   'PML': False ## No PML
+                   'PML': False, ## No PML
+                   'stride': 1
                    }
     myGrid = FDTD_GRID(grid_param)
 

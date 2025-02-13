@@ -29,6 +29,7 @@ class FDTD_GRID:
     - max_time -> maximum simulation time
     - max_x -> max value of x 
     - PML -> T/F if PML boundary required
+    - stride -> how many time steps to print
     - max_y -> max value of y [Only required if 2D simulation]
     - 2d_mode -> mode of 2D wave TM or TE [Only required for 2D simulation]
     '''
@@ -68,6 +69,8 @@ class FDTD_GRID:
         self.sigma_e = None
         self.sigma_m = None
         self.eta = None
+        self.HAS_MAT = False
+        self.mat_idx = None
 
         ## Fields
         self.E = None
@@ -112,7 +115,7 @@ class FDTD_GRID:
         self.ax = None
         self.save_ani = False
         self.ani_name = None
-
+        self.stride = args['stride']
         ## Initialization Finished
         self.logger.info(f"delta_t: {self.delta_t} -- #steps: {self.total_t}")
         self.logger.info(f"delta_x: {self.delta_x} -- #steps: {self.total_x}")
@@ -231,16 +234,19 @@ class FDTD_GRID:
        
         ### Calculate the index for x position
         idx_start = int(args['x_start']/self.delta_x) + self.X_PML_SIZE
-        idx_end = int(args('x_end')/self.delta_x) + self.X_PML_SIZE
+        idx_end = int(args['x_end']/self.delta_x) + self.X_PML_SIZE
         if (self.dim == '1D'):
             self.epsilon[idx_start:idx_end] = self.epsilon[idx_start:idx_end] * args["eps_r"]
             self.miu[idx_start:idx_end] = self.miu[idx_start:idx_end] * args["miu_r"]
             self.sigma_e[idx_start:idx_end] = args["sigma_e"]
-            self.logger.info(f"Material added to from node {idx_start} to {idx_end}")
+            self.logger.info(f"Material with er={args["eps_r"]}, ur={args["miu_r"]}, and sig={args["sigma_e"]} added to from node {idx_start} to {idx_end}")
         else:
             self.logger.critical("2D materials not supported")
             exit(-1)
 
+        self.HAS_MAT = True
+        self.mat_idx = (idx_start, idx_end)
+        
     '''
     A dictionary with the following keys is expected:
         - src_func: a function that takes a single argument t and returns a np.array of the correct size
@@ -262,7 +268,7 @@ class FDTD_GRID:
 
         self.src_func = args["src_func"]
         self.src_added = True
-        self.logger.info(f"Source located at nodes [{self.src_x_indx_strt}, {self.src_x_indx_end}")
+        self.logger.info(f"Source located at nodes [{self.src_x_indx_strt}, {self.src_x_indx_end}]")
 
     def tmz_coeff(self):
         '''
@@ -363,9 +369,10 @@ class FDTD_GRID:
     
     def update_1d(self, t, src_args):
         self.time_stepping_1d(t, src_args)
-        self.animation_obj["e_field"].set_ydata(self.E)
-        self.animation_obj["h_field"].set_ydata(np.multiply(self.eta,self.H))
-        self.animation_obj["time_txt"].set_text(f't = {t*1e12:.2f} ps')
+        if(int(t/self.delta_t) % self.stride == 0):
+            self.animation_obj["e_field"].set_ydata(self.E)
+            self.animation_obj["h_field"].set_ydata(np.multiply(self.eta,self.H))
+            self.animation_obj["time_txt"].set_text(f't = {t*1e12:.2f} ps')
         return self.animation_obj["e_field"], self.animation_obj["h_field"], self.animation_obj["time_txt"]
     
     def runner_1d(self, amp_range, src_args):
@@ -397,6 +404,9 @@ class FDTD_GRID:
             self.ax.fill_between(x[:self.X_PML_SIZE], y_range[0], y_range[1], color='gray', alpha=0.5)
             self.ax.fill_between(x[-self.X_PML_SIZE:], y_range[0], y_range[1], color='gray', alpha=0.5)
         
+        if(self.HAS_MAT):
+            self.ax.fill_between(x[self.mat_idx[0]:self.mat_idx[1]], y_range[0], y_range[1], color='lightblue', alpha=0.5)
+        
         self.ax.set_xlabel("Distance [m]")
         self.ax.set_ylabel("Amplitude")
         
@@ -405,7 +415,7 @@ class FDTD_GRID:
         
         if self.save_ani:
             ani.save(self.ani_name, writer="imagemagick", fps=30)
-            logging.info("Animation saved to" + self.ani_name) 
+            logging.info("Animation saved to " + self.ani_name) 
         else:
             plt.show()
 
