@@ -100,6 +100,9 @@ class FDTD_GRID:
         self.animation_obj = None
         self.fig = None
         self.ax = None
+        self.save_ani = False
+        self.ani_name = None
+
         ## Initialization Finished
         self.logger.info(f"delta_t: {self.delta_t} -- #steps: {self.total_t}")
         self.logger.info(f"delta_x: {self.delta_x} -- #steps: {self.total_x}")
@@ -355,7 +358,7 @@ class FDTD_GRID:
         self.animation_obj["time_txt"].set_text(f't = {t*1e12:.2f} ps')
         return self.animation_obj["e_field"], self.animation_obj["h_field"], self.animation_obj["time_txt"]
     
-    def runner_1d(self, amp_range):
+    def runner_1d(self, amp_range, ani_name):
 
         ## FIXME: need to figure out a way to get this ranges adaptable based on factors
         ## animation params
@@ -374,18 +377,24 @@ class FDTD_GRID:
         grid_end = self.x_max + self.X_PML_SIZE * self.delta_x
         x = np.linspace(grid_start, grid_end, num=self.total_x)
 
-        self.animation_obj["e_field"], = self.ax.plot(x*1e3, self.E, label="E field")
-        self.animation_obj["h_field"], = self.ax.plot(x*1e3, np.multiply(self.eta,self.H), label="z*H field", linestyle='--')
+        self.animation_obj["e_field"], = self.ax.plot(x, self.E, label="E field")
+        self.animation_obj["h_field"], = self.ax.plot(x, np.multiply(self.eta,self.H), label="z*H field", linestyle='--')
         self.ax.set_ylim(y_range[0], y_range[1])
         self.animation_obj["time_txt"] = self.ax.text(0.5, 0.9, '', transform=self.ax.transAxes, fontsize=12, color='red')
         self.ax.legend()
-        ##self.ax.fill_between(x[:self.X_PML_SIZE]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
-        ##self.ax.fill_between(x[-self.X_PML_SIZE:]*1e3, y_range[0], y_range[1], color='red', alpha=0.5)
-        self.ax.set_xlabel("Distance [mm]")
+        
+        if(self.HAS_PML):
+            self.ax.fill_between(x[:self.X_PML_SIZE], y_range[0], y_range[1], color='gray', alpha=0.5)
+            self.ax.fill_between(x[-self.X_PML_SIZE:], y_range[0], y_range[1], color='gray', alpha=0.5)
+        
+        self.ax.set_xlabel("Distance [m]")
         self.ax.set_ylabel("Amplitude")
         
     
         ani = FuncAnimation(self.fig, self.update_1d, frames=np.arange(0, self.t_max + self.delta_t , self.delta_t), interval=50, blit=True, repeat=False)
+        if self.save_ani:
+            ani.save(self.ani_name, writer="imagemagick", fps=30)
+            logging.info("Animation saved to" + self.ani_name) 
         plt.show()
 
     '''
@@ -395,6 +404,10 @@ class FDTD_GRID:
         if(not self.src_added and self.state != 'READY'):
             self.logger.critical(f"EITHER SRC IS MISSING OR STATE IS NO READY! --- CURR.STATE: {self.state}")
             exit(-1)
+        
+        if(sim_name):
+            self.save_ani = True
+            self.ani_name = sim_name
         
         if(self.dim == '1D'):
             self.runner_1d(amp_range)
