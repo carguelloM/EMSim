@@ -50,4 +50,5 @@ python3 1d_fdtd_two_materials.py --mode [S|P] ## S for saving to gif and P for p
 `1d_fdtd_dielectric_pml.py --mode S`
 
 **Output**:
+
 ![](sims/1d_fdtd_dielectric_pml.gif)
