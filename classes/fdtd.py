@@ -3,12 +3,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 
-## CONSTANTS
+## CONSTANTS ####
 c = 299792458 ## speed of light 
 eta_0 = 377 ## impedance of free space
 eps_0 = 8.85418782e-12
 miu_0 = 1.25663706e-6
 
+##### OTHER FUNCTIONS ##########
+
+'''
+Point sinusoidal source
+'''
+def pnt_sin_src_1d(t, f_src):
+   
+    return np.sin(2*np.pi*f_src*t)
+
+#### MAIN FDTD CLASSS ###########
 class FDTD_GRID:
     ## Constructor
     '''
@@ -22,7 +32,7 @@ class FDTD_GRID:
     - max_y -> max value of y [Only required if 2D simulation]
     - 2d_mode -> mode of 2D wave TM or TE [Only required for 2D simulation]
     '''
-    def __init__(self, args, ):
+    def __init__(self, args):
         
         ## logging
         self.logger = logging.getLogger("FDTD")
@@ -196,7 +206,7 @@ class FDTD_GRID:
 
             ## sigma_m is calculated to match impedance
             self.sigma_m[:self.X_PML_SIZE] =  np.multiply(self.sigma_e[:self.X_PML_SIZE], np.divide(self.miu[:self.X_PML_SIZE],self.epsilon[:self.X_PML_SIZE]))
-            self.sigma_m[-self.X_PML_SIZE] =  np.multiply(self.sigma_e[-self.X_PML_SIZE:] , np.divide(self.miu[-self.X_PML_SIZE:],self.epsilon[-self.X_PML_SIZE:]))
+            self.sigma_m[-self.X_PML_SIZE:] =  np.multiply(self.sigma_e[-self.X_PML_SIZE:] , np.divide(self.miu[-self.X_PML_SIZE:],self.epsilon[-self.X_PML_SIZE:]))
         else:
             self.logger.critical("2D PML not implemented yet!")
         
@@ -277,7 +287,7 @@ class FDTD_GRID:
             self.logger.critical(f"To calculate coef you should be in PML state. You're in {self.state}")
             exit(-1)
         ## if grid does not have PML then materials should have been already added
-        elif(self.state != 'MAT'):
+        elif(self.HAS_PML == False and self.state != 'MAT'):
             self.logger.critical(f"To calculate coef you should be in MAT state. You're in {self.state}")
             exit(-1)
 
@@ -303,7 +313,7 @@ class FDTD_GRID:
         self.state = 'READY'
 
 
-    def time_stepping_1d(self, t):
+    def time_stepping_1d(self, t,src_args):
      
         ## update magnetic field
         ## H(x+1/2,t+1/2) = H(x+1/2,t+1/2) + [delta_t/(miu*delta_x)] (E(x+1,t)-E(x,t))
@@ -316,7 +326,7 @@ class FDTD_GRID:
         self.E[0] = 0 ## set first node to zero
 
         ## add source term
-        self.E[self.src_x_indx_strt:self.src_x_indx_end] = self.E[self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t)
+        self.E[self.src_x_indx_strt:self.src_x_indx_end] = self.E[self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
         
     def time_stepping_2d_tmz(t, args):
         E = args["e_field"]
@@ -351,14 +361,14 @@ class FDTD_GRID:
         E[idx_src_x, idx_src_y] =E[idx_src_x, idx_src_y] + args["del_t"]/args["eps"][idx_src_x, idx_src_y]*np.sin(2*np.pi*args["f_src"]*t)
         
     
-    def update_1d(self, t):
-        self.time_stepping_1d(t)
+    def update_1d(self, t, src_args):
+        self.time_stepping_1d(t, src_args)
         self.animation_obj["e_field"].set_ydata(self.E)
         self.animation_obj["h_field"].set_ydata(np.multiply(self.eta,self.H))
         self.animation_obj["time_txt"].set_text(f't = {t*1e12:.2f} ps')
         return self.animation_obj["e_field"], self.animation_obj["h_field"], self.animation_obj["time_txt"]
     
-    def runner_1d(self, amp_range, ani_name):
+    def runner_1d(self, amp_range, src_args):
 
         ## FIXME: need to figure out a way to get this ranges adaptable based on factors
         ## animation params
@@ -375,7 +385,7 @@ class FDTD_GRID:
         ## grid start value 
         grid_start = -self.X_PML_SIZE * self.delta_x
         grid_end = self.x_max + self.X_PML_SIZE * self.delta_x
-        x = np.linspace(grid_start, grid_end, num=self.total_x)
+        x = np.linspace(grid_start, grid_end, num=self.total_x+(2*self.X_PML_SIZE))
 
         self.animation_obj["e_field"], = self.ax.plot(x, self.E, label="E field")
         self.animation_obj["h_field"], = self.ax.plot(x, np.multiply(self.eta,self.H), label="z*H field", linestyle='--')
@@ -391,23 +401,29 @@ class FDTD_GRID:
         self.ax.set_ylabel("Amplitude")
         
     
-        ani = FuncAnimation(self.fig, self.update_1d, frames=np.arange(0, self.t_max + self.delta_t , self.delta_t), interval=50, blit=True, repeat=False)
+        ani = FuncAnimation(self.fig, self.update_1d, fargs=(src_args,), frames=np.arange(0, self.t_max + self.delta_t , self.delta_t), interval=50, blit=True, repeat=False)
+        
         if self.save_ani:
             ani.save(self.ani_name, writer="imagemagick", fps=30)
             logging.info("Animation saved to" + self.ani_name) 
-        plt.show()
+        else:
+            plt.show()
 
     '''
     amp range is tuple specifying the range of the plot/ the expected amplitudes of the fields
+    src args is arbitrary variable that the source function should handle
     '''
-    def start_sim(self, amp_range, sim_name=None):
-        if(not self.src_added and self.state != 'READY'):
-            self.logger.critical(f"EITHER SRC IS MISSING OR STATE IS NO READY! --- CURR.STATE: {self.state}")
+    def start_sim(self, amp_range, src_args, sim_name=None):
+        if(self.state != 'READY'):
+            self.logger.critical(f"STATE IS NO READY! --- CURR.STATE: {self.state}")
             exit(-1)
         
+        if(not self.src_added):
+            self.logger.warning(f"No source has been added")
+
         if(sim_name):
             self.save_ani = True
             self.ani_name = sim_name
         
         if(self.dim == '1D'):
-            self.runner_1d(amp_range)
+            self.runner_1d(amp_range, src_args)
