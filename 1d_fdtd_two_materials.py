@@ -4,7 +4,7 @@ import classes
 import logging
 import matplotlib.pyplot as plt
 from classes.constants import *
-from classes.fdtd import time_stepping_1d
+# from classes.fdtd import time_stepping_1d
 from matplotlib.animation import FuncAnimation
 import argparse
 
@@ -131,7 +131,7 @@ if __name__=="__main__":
     log.info("Starting 1D FDTD simulation")
     logging.info(f"delta_t: {delta_t} - #steps:{round(t_max/delta_t) + 1} \n delta_x: {delta_x} - #steps:{round(x_max/delta_x) + 1}")
     logging.info(f"Index of Source is:{indx_src}")
-
+    exit(0)
     ani = FuncAnimation(fig, update, frames=np.arange(0, t_max + delta_t , delta_t), interval=50, blit=True, repeat=False)
 
     if MODE=="S":
