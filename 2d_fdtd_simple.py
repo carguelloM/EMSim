@@ -1,88 +1,69 @@
-import numpy as np
 import classes
 import logging
-from classes.constants import *
-import matplotlib.pyplot as plt
-from classes.fdtd import time_stepping_2d
+from classes.fdtd import FDTD_GRID
+from classes.fdtd import pnt_sin_src
 import argparse
-
-## Parameters
-f_sampling = 5e12 ## 5 THz >> f_src/2
+import math
 f_src = 500e9 ## 500 GHz
-x_max = 8e-3 ## 8 mm
-y_max = 8e-3 ## 8 mm
-t_max = 10e-12 ## 10 ps
-delta_t = (1/f_sampling) 
-Sc = 1/np.sqrt(2) ## Best Courant number in 2D 
-delta_x = (c*delta_t)/Sc
-delta_y = delta_x
-
-total_x = round(x_max/delta_x)
-total_y = round(x_max/delta_y)
-
-## Vectors
-xy_plane = np.zeros((total_x, total_y))
-epsilon = np.ones((total_x, total_y))
-miu = np.ones((total_x, total_y))
-sigma_e = np.zeros((total_x, total_y))
-sigma_m = np.zeros((total_x, total_y))
-E = np.zeros((total_x, total_y))
-Hx = np.zeros((total_x, total_y))
-Hy = np.zeros((total_x, total_y))
-
-
-##### MATERIAL RELATED ###
-epsilon = epsilon * permiti_free_space 
-miu = miu * premea_freee_space
-
-### PML RELATED (TODO) ####
 
 
 
-#### ONE TIME CALCUALTIONS ### 
-Chxh = np.divide(1-np.divide(sigma_m*delta_t, 2*miu), 1+np.divide(sigma_m*delta_t, 2*miu))
-Chxe = np.multiply(1/(1+np.divide(sigma_m*delta_t, 2*miu)), (delta_t/delta_x)/(miu))
-Chyh = np.divide(1-np.divide(sigma_m*delta_t, 2*miu), 1+np.divide(sigma_m*delta_t, 2*miu)) 
-Chye = np.multiply(1/(1+np.divide(sigma_m*delta_t, 2*miu)), (delta_t/delta_x)/miu)
-Ceze = np.divide(1-np.divide(delta_t*sigma_e, 2*epsilon), 1+np.divide(delta_t*sigma_e,2*epsilon))
-Cezh = np.multiply(1/(1+np.divide(sigma_e*delta_t, 2*epsilon)), (delta_t/delta_x)/epsilon)
-
-### SOURCE RELATED ##
-
-## source should be at center of simulation
-idx_src_x = int((x_max/2)/delta_x)
-idx_src_y = int((y_max/2)/delta_y)
-
-def update(t, im):
-    global E,Hx, Hy, idx_src_x, idx_src_y
-    args_2d = { "e_field": E,
-                "h_fieldx": Hx,
-                "h_fieldy":Hy,
-                "Chxh": Chxh,
-                "Chxe": Chxe, 
-                "Chyh": Chyh,
-                "Chye": Chye,
-                "Ceze": Ceze,
-                "Cezh": Cezh,
-                "idx_src_x": idx_src_x,
-                "idx_src_y": idx_src_y, 
-                "f_src":f_src,
-                "eps":epsilon,
-                "del_t": delta_t
-                } 
-    E, Hx, Hy = time_stepping_2d(t, args_2d)
+'''
+Recipe to create a simulation
+1. Create grid
+2. Add material
+3. Apply PML
+4. Calculate coefficients
+5. Add Source
+6. Run the simulation
+'''
+if __name__=="__main__":
     
-    im.set_data(E)
-    fig.canvas.draw()
-    plt.pause(0.1)
+    classes.setup_log()
+    ## Argument parsing
+    parser = argparse.ArgumentParser(description="1D Simulation EM Wave in Free Space.")
+    parser.add_argument("--mode", type=str, help="S(Save) & P(Print)")
+    args = parser.parse_args()
 
-fig, ax = plt.subplots()
-im = ax.imshow(E, vmin=-0.005, cmap='plasma', vmax=0.005)
-plt.colorbar(im)
-print(f" Delta X: {delta_x}")
-print(f"Total T: {round(t_max/delta_t)} -- Delta t {delta_t}")
-t = 0
-while t < t_max:
-    update(t,im)
-    t  = t + delta_t
-plt.show()
+    animation_fn = None
+
+    if(args.mode != 'S' and args.mode != 'P'):
+        print("Error: Invalid Operation Mode")
+        exit(-1)
+
+    
+    if args.mode == "S":
+        name = input("Name for simulation:")
+        animation_fn = "sims/"+ name + ".gif"
+    
+    ## 1. Create Grid
+    grid_param = { 'dim': '2D',
+                   'sampling_freq': 5e12, ## 5 THz
+                   'courant_num':1/math.sqrt(2),
+                   'max_time': 10e-12, ## 10 ps
+                   'max_x': 8e-3, ## 8 mm
+                   'max_y': 8e-3, ## 8 mm
+                   'PML': False, ## No PML
+                   '2d_mode': 'TMZ',
+                   'stride': 1
+                   }
+    myGrid = FDTD_GRID(grid_param)
+   
+    ## 2. NO materials
+    ## 3. NO PML
+
+    ## 4. Calculate Coefficients
+    myGrid.coeff_calculation()
+  
+    ## 5. Add source
+    src_args = { "src_func":pnt_sin_src,
+                "x_start":4e-3, ## 4 mm/middle of the grid
+                "x_end":4e-3, ## start=end for pnt src
+                "y_start":4e-3, ## 4 mm/middle of the grid
+                "y_end":4e-3, ## start=end for pnt src
+                }
+    myGrid.add_src(src_args)
+  
+    ## 6. Start Simulation
+    f_src_args={"f_src":500e9}
+    myGrid.start_sim((-0.005, 0.005), f_src_args, animation_fn)

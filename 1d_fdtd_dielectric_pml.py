@@ -3,7 +3,7 @@
 import classes
 import logging
 from classes.fdtd import FDTD_GRID
-from classes.fdtd import pnt_sin_src_1d
+from classes.fdtd import pnt_sin_src
 import argparse
    
 '''
@@ -60,7 +60,7 @@ if __name__=="__main__":
     myGrid.coeff_calculation()
 
     ## 5. Add source
-    src_args = { "src_func":pnt_sin_src_1d,
+    src_args = { "src_func":pnt_sin_src,
                 "x_start":50e-3, ## 50 mm/middle of the grid
                 "x_end":50e-3, ## start=end for pnt src
                 }
