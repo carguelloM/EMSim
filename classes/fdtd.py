@@ -380,14 +380,19 @@ class FDTD_GRID:
         self.fig, self.ax = plt.subplots(1,3, figsize=(15, 5))   ## axes are 1 row 3 cols  
         txt_ax =  self.fig.add_axes([0, 0, 1, 1], frameon=False) # Invisible axes over entire figure
         self.animation_obj['time_txt'] = txt_ax.text(0.5, 0.9, '', transform=txt_ax.transAxes, fontsize=12, color='red')
-        self.animation_obj['e_field'] = self.ax[0].imshow(self.E, cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1])
-        self.animation_obj['hx_field'] = self.ax[1].imshow(np.multiply(self.H['Hx'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1])
-        self.animation_obj['hy_field'] = self.ax[2].imshow(np.multiply(self.H['Hy'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1])
+        self.animation_obj['e_field'] = self.ax[0].imshow(self.E, cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1],  extent=[0, self.x_max, 0, self.y_max])
+        self.animation_obj['hx_field'] = self.ax[1].imshow(np.multiply(self.H['Hx'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
+        self.animation_obj['hy_field'] = self.ax[2].imshow(np.multiply(self.H['Hy'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
         
-        cbar = self.fig.colorbar( self.animation_obj['e_field'], ax=self.ax, orientation="vertical", fraction=0.015, pad=0.02)
+        cbar = self.fig.colorbar( self.animation_obj['e_field'], ax=self.ax, orientation="vertical", fraction=0.012)
+        cbar.set_label("Field Intensity", rotation=-90)
+
+        self.fig.text(0.02, 0.5, 'Y [m]', ha='left', va='center', rotation='vertical') 
+        self.fig.text(0.5, 0.02, 'X [mm]', ha='center', va='bottom')
         self.ax[0].set_title('E Field')
         self.ax[1].set_title(r'$H_x$')
         self.ax[2].set_title(r'$H_y$')
+        self.fig.tight_layout(rect=[0.02, 0.02, 0.85, 0.90])  #
 
     def update_1d(self, t, src_args):
         self.time_stepping_1d(t, src_args)
