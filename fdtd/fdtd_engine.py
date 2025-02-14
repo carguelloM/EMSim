@@ -3,21 +3,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 import matplotlib.patches as patches
+import fdtd
 
+fdtd.setup_log()
 ## CONSTANTS ####
 c = 299792458 ## speed of light 
 eta_0 = 377 ## impedance of free space
 eps_0 = 8.85418782e-12
 miu_0 = 1.25663706e-6
 
-##### OTHER FUNCTIONS ##########
-
-'''
-Point sinusoidal source
-'''
-def pnt_sin_src(t, f_src):
-   
-    return np.sin(2*np.pi*f_src*t)
 
 #### MAIN FDTD CLASSS ###########
 class FDTD_GRID:

@@ -1,7 +1,5 @@
-import classes
 import logging
-from classes.fdtd import FDTD_GRID
-from classes.fdtd import pnt_sin_src
+from fdtd import fdtd_engine as sim, sources as src
 import argparse
 import math
 f_src = 500e9 ## 500 GHz
@@ -19,7 +17,6 @@ Recipe to create a simulation
 '''
 if __name__=="__main__":
     
-    classes.setup_log()
     ## Argument parsing
     parser = argparse.ArgumentParser(description="1D Simulation EM Wave in Free Space.")
     parser.add_argument("--mode", type=str, help="S(Save) & P(Print)")
@@ -47,7 +44,7 @@ if __name__=="__main__":
                    '2d_mode': 'TMZ',
                    'stride': 1
                    }
-    myGrid = FDTD_GRID(grid_param)
+    myGrid = sim.FDTD_GRID(grid_param)
    
     ## 2. materials
     mat_args ={'x_start': 5e-3,
@@ -65,7 +62,7 @@ if __name__=="__main__":
     myGrid.coeff_calculation()
   
     ## 5. Add source
-    src_args = { "src_func":pnt_sin_src,
+    src_args = { "src_func":src.pnt_sin_src,
                 "x_start":4e-3, ## 4 mm/middle of the grid
                 "x_end":4e-3, ## start=end for pnt src
                 "y_start":4e-3, ## 4 mm/middle of the grid
