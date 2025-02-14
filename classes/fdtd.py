@@ -71,7 +71,7 @@ class FDTD_GRID:
         self.sigma_m = None
         self.eta = None
         self.HAS_MAT = False
-        self.mat_idx = None
+        self.mat_idx = []
 
         ## Fields
         self.E = None
@@ -238,15 +238,18 @@ class FDTD_GRID:
         idx_end = int(args['x_end']/self.delta_x) + self.X_PML_SIZE
         
         if (self.dim == '1D'):
-            if(idx_start == idx_end):
-                self.logger.critical("Single Point Material not supported")
+            
+            if(idx_start==idx_end):
+                self.logger.critical("Point Material not supported")
                 exit(-1)
 
             self.epsilon[idx_start:idx_end] = self.epsilon[idx_start:idx_end] * args["eps_r"]
             self.miu[idx_start:idx_end] = self.miu[idx_start:idx_end] * args["miu_r"]
             self.sigma_e[idx_start:idx_end] = args["sigma_e"]
             self.logger.info(f"Material with er={args["eps_r"]}, ur={args["miu_r"]}, and sig={args["sigma_e"]} added to from node {idx_start} to {idx_end}")
-            self.mat_idx = (idx_start, idx_end)
+            
+            mat_col = 'red' if 'color' not in args else args['color']
+            self.mat_idx.append((idx_start, idx_end, mat_col))
         
         else:
             idx_start_y = int(args['y_start']/self.delta_x) + self.Y_PML_SIZE
@@ -254,11 +257,15 @@ class FDTD_GRID:
             if(idx_start == idx_end and idx_start_y==idx_end_y):
                 self.logger.critical("Single Point Material not supported")
                 exit(-1)
-            self.epsilon[idx_start:idx_end, idx_start_y:idx_end_y] = self.epsilon[idx_start:idx_end, idx_start_y:idx_end_y]*args["eps_r"]
-            self.miu[idx_start:idx_end, idx_start_y:idx_end_y] = self.miu[idx_start:idx_end, idx_start_y:idx_end_y]  *  args["miu_r"]
-            self.sigma_e[idx_start:idx_end, idx_start_y:idx_end_y] = args["sigma_e"]
+            self.epsilon[idx_start_y:idx_end_y,idx_start:idx_end] = self.epsilon[idx_start_y:idx_end_y, idx_start:idx_end]*args["eps_r"]
+            self.miu[idx_start_y:idx_end_y, idx_start:idx_end] = self.miu[idx_start_y:idx_end_y, idx_start:idx_end]  *  args["miu_r"]
+            self.sigma_e[idx_start_y:idx_end_y,idx_start:idx_end] = args["sigma_e"]
             self.logger.info(f"Material with er={args["eps_r"]}, ur={args["miu_r"]}, and sig={args["sigma_e"]} added to from node ({idx_start},{idx_end}) to node ({idx_start_y, idx_end_y})")
-            self.mat_idx = (idx_start, idx_end, idx_start_y, idx_end_y)
+            
+            mat_col = 'red' if 'color' not in args else args['color']
+         
+            ## Material idex for 2D must be the actual (float) position with respect to axis not integer index
+            self.mat_idx.append((args['x_start'], args['x_end'], args['y_start'], args['y_end'], mat_col))
 
         self.HAS_MAT = True
        
@@ -360,23 +367,24 @@ class FDTD_GRID:
     def time_stepping_2d_tmz(self, t, src_args):
        
         ## from Schneider book page 188 (code) -- Equation 8.10 in page 186
-        self.H['Hx'][:,:-1] =  np.multiply(self.coef['Chxh'][:,:-1], self.H['Hx'][:,:-1]) - np.multiply(self.coef['Chxe'][:, :-1],(self.E[:,1:] - self.E[:,:-1]))
-        ## set last column to zero
-        self.H['Hx'][:,-1] = 0
+        self.H['Hx'][:-1,:] =  np.multiply(self.coef['Chxh'][:-1,:], self.H['Hx'][:-1,:]) - np.multiply(self.coef['Chxe'][:-1, :],(self.E[1:,:] - self.E[:-1,:]))
+        ## set last row (y=N) to zero
+        self.H['Hx'][-1,:] = 0
 
         ## from Schneider book page 188 (code) -- Equation 8.11 in page 186
-        self.H['Hy'][:-1,:] = np.multiply(self.coef['Chyh'][:-1,:], self.H['Hy'][:-1,:]) + np.multiply(self.coef['Chye'][:-1,:], (self.E[1:,:] - self.E[:-1,:]))
-        ## set last row to zero
-        self.H['Hy'][-1,:] = 0
+        self.H['Hy'][:,:-1] = np.multiply(self.coef['Chyh'][:,:-1], self.H['Hy'][:,:-1]) + np.multiply(self.coef['Chye'][:,:-1], (self.E[:,1:] - self.E[:,:-1]))
+        ## set last column (x=M) to zero
+        self.H['Hy'][:,-1] = 0
 
         ## from Schneider book page 188 (code) -- Equation 8.12 in page 188
-        self.E[1:,1:] = np.multiply(self.coef['Ceze'][1:,1:], self.E[1:,1:]) + np.multiply(self.coef['Cezh'][1:,1:], ((self.H['Hy'][1:,1:] - self.H['Hy'][:-1,1:]) - (self.H['Hx'][1:,1:] - self.H['Hx'][1:,:-1])))
-        ## set first row and column to zero
+        self.E[1:,1:] = np.multiply(self.coef['Ceze'][1:,1:], self.E[1:,1:]) + np.multiply(self.coef['Cezh'][1:,1:], ((self.H['Hy'][1:,1:] - self.H['Hy'][1:,:-1]) - (self.H['Hx'][1:,1:] - self.H['Hx'][:-1,1:])))
+        ## set first row (Y=0) to zero
+        ## set first column (X=0) to zero
         self.E[1,:] = 0
         self.E[:,1] = 0
 
         ## add source term
-        self.E[self.src_x_indx_strt:self.src_x_indx_end, self.src_y_indx_strt:self.src_y_indx_end] = self.E[self.src_x_indx_strt:self.src_x_indx_end, self.src_y_indx_strt:self.src_y_indx_end] + (self.delta_t/self.epsilon[self.src_x_indx_strt:self.src_x_indx_end, self.src_y_indx_strt:self.src_y_indx_end])*self.src_func(t, **src_args)
+        self.E[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
         
     def update_2d(self, t, src_args):
         self.time_stepping_2d_tmz(t, src_args)
@@ -385,13 +393,14 @@ class FDTD_GRID:
             self.animation_obj['hx_field'].set_array(np.multiply(self.eta,self.H['Hx']))
             self.animation_obj['hy_field'].set_array(np.multiply(self.eta,self.H['Hy']))
             self.animation_obj['time_txt'].set_text(f"t = {t*1e12:.2f} ps")
-        return [self.animation_obj['e_field'], self.animation_obj['hx_field'], self.animation_obj['hy_field'], self.animation_obj['time_txt']]
+        return [self.animation_obj['e_field'], self.animation_obj['hx_field'], self.animation_obj['hy_field'], self.animation_obj['time_txt'], *self.animation_obj['material_drawings']]
 
     def runner_2d(self, amp_range):
         self.animation_obj = {'e_field': None,
                               'hx_field': None,
                               'hy_none': None,
-                              'time_txt': None}
+                              'time_txt': None,
+                              'material_drawings':[]}
         
         self.fig, self.ax = plt.subplots(1,3, figsize=(15, 5))   ## axes are 1 row 3 cols  
         txt_ax =  self.fig.add_axes([0, 0, 1, 1], frameon=False) # Invisible axes over entire figure
@@ -404,20 +413,22 @@ class FDTD_GRID:
         cbar.set_label("Field Intensity", rotation=-90)
 
         if(self.HAS_MAT):
-            ## Calculate Hight: 
-            height = self.mat_idx[3] - self.mat_idx[2]
-            width = self.mat_idx[1] - self.mat_idx[0]
-            rect = patches.Rectangle((3, 3), 10, 20, linewidth=5, facecolor='black')
-            self.ax[0].add_patch(rect)
+            ## iterate through all materials
+            for i, mats in enumerate(self.mat_idx):
+                ## Calculate Hight: 
+                height = mats[3] - mats[2]
+                width = mats[1] - mats[0]
+                for j in range(3):
+                    self.animation_obj['material_drawings'].append(patches.Rectangle((mats[0], mats[2]), width, height, linewidth=5, facecolor=mats[4], zorder=10, alpha=0.4))
+                    self.ax[j].add_patch(self.animation_obj['material_drawings'][3*i+j])
+                
             
-            print("YE")
-
         self.fig.text(0.02, 0.5, 'Y [m]', ha='left', va='center', rotation='vertical') 
         self.fig.text(0.5, 0.02, 'X [mm]', ha='center', va='bottom')
         self.ax[0].set_title('E Field')
         self.ax[1].set_title(r'$H_x$')
         self.ax[2].set_title(r'$H_y$')
-        #self.fig.tight_layout(rect=[0.02, 0.02, 0.85, 0.90])  #
+        self.fig.tight_layout(rect=[0.02, 0.02, 0.85, 0.90])  
 
     def update_1d(self, t, src_args):
         self.time_stepping_1d(t, src_args)
@@ -433,7 +444,8 @@ class FDTD_GRID:
         ## animation params
         self.animation_obj = { "e_field": None,
                                 "h_field":None,
-                                "time_txt":None}
+                                "time_txt":None
+                                }
         
         self.fig, self.ax = plt.subplots() 
         y_range = amp_range
@@ -454,7 +466,8 @@ class FDTD_GRID:
             self.ax.fill_between(x[-self.X_PML_SIZE:], y_range[0], y_range[1], color='gray', alpha=0.5)
         
         if(self.HAS_MAT):
-            self.ax.fill_between(x[self.mat_idx[0]:self.mat_idx[1]], y_range[0], y_range[1], color='lightblue', alpha=0.5)
+            for mats in self.mat_idx:
+                self.ax.fill_between(x[mats[0]:mats[1]], y_range[0], y_range[1], color=mats[2], alpha=0.5)
         
         self.ax.set_xlabel("Distance [m]")
         self.ax.set_ylabel("Amplitude")

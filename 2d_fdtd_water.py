@@ -56,7 +56,8 @@ if __name__=="__main__":
                'y_end':8e-3,
                'eps_r': 1.7,
                'miu_r':1,
-                'sigma_e':10,}
+               'sigma_e':10,
+               'color': 'lightblue'}
     myGrid.add_material(mat_args)
     ## 3. NO PML
 

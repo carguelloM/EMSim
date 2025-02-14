@@ -50,7 +50,8 @@ if __name__=="__main__":
                 'x_end': 40e-3,
                 'eps_r': 4,
                 'miu_r': 1,
-                'sigma_e': 0 ## dielectric 
+                'sigma_e': 0, ## dielectric
+                'color': 'green'
                 }
     myGrid.add_material(mat_args)
     ## 3. NO PML

@@ -63,3 +63,10 @@ python3 1d_fdtd_two_materials.py --mode [S|P] ## S for saving to gif and P for p
 **Output**:
 
 ![](sims/2d_fdtd_simple.gif)
+
+2D TMZ wave simulation with **fixed** boundaries (fields are **zero**). There is 300 GHz point source at the  middle of the grid ($x=4$ mm, $y=4$ mm). The space between $x=5$ mm and $x=8$ mm is filled with water ($\epsilon_r$ = 1.7, $\sigma$ =10). Note that $\mathbf{H}$ is multiplied by the impedance of the medium ($\eta_0$ for $x \lt 5$  mm and $\eta_w$ for $x \geq 5$ mm) for visualization purposes ($\mathbf{|E|} = \mathbf{|H|}$).
+
+**Command**:
+`python3 2d_fdtd_water.py --mode P`
+
+![](sims/2d_fdtd_water.gif)
