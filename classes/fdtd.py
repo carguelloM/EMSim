@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
+import matplotlib.patches as patches
 
 ## CONSTANTS ####
 c = 299792458 ## speed of light 
@@ -235,17 +236,32 @@ class FDTD_GRID:
         ### Calculate the index for x position
         idx_start = int(args['x_start']/self.delta_x) + self.X_PML_SIZE
         idx_end = int(args['x_end']/self.delta_x) + self.X_PML_SIZE
+        
         if (self.dim == '1D'):
+            if(idx_start == idx_end):
+                self.logger.critical("Single Point Material not supported")
+                exit(-1)
+
             self.epsilon[idx_start:idx_end] = self.epsilon[idx_start:idx_end] * args["eps_r"]
             self.miu[idx_start:idx_end] = self.miu[idx_start:idx_end] * args["miu_r"]
             self.sigma_e[idx_start:idx_end] = args["sigma_e"]
             self.logger.info(f"Material with er={args["eps_r"]}, ur={args["miu_r"]}, and sig={args["sigma_e"]} added to from node {idx_start} to {idx_end}")
+            self.mat_idx = (idx_start, idx_end)
+        
         else:
-            self.logger.critical("2D materials not supported")
-            exit(-1)
+            idx_start_y = int(args['y_start']/self.delta_x) + self.Y_PML_SIZE
+            idx_end_y = int(args['y_end']/self.delta_x) + self.Y_PML_SIZE
+            if(idx_start == idx_end and idx_start_y==idx_end_y):
+                self.logger.critical("Single Point Material not supported")
+                exit(-1)
+            self.epsilon[idx_start:idx_end, idx_start_y:idx_end_y] = self.epsilon[idx_start:idx_end, idx_start_y:idx_end_y]*args["eps_r"]
+            self.miu[idx_start:idx_end, idx_start_y:idx_end_y] = self.miu[idx_start:idx_end, idx_start_y:idx_end_y]  *  args["miu_r"]
+            self.sigma_e[idx_start:idx_end, idx_start_y:idx_end_y] = args["sigma_e"]
+            self.logger.info(f"Material with er={args["eps_r"]}, ur={args["miu_r"]}, and sig={args["sigma_e"]} added to from node ({idx_start},{idx_end}) to node ({idx_start_y, idx_end_y})")
+            self.mat_idx = (idx_start, idx_end, idx_start_y, idx_end_y)
 
         self.HAS_MAT = True
-        self.mat_idx = (idx_start, idx_end)
+       
         
     '''
     A dictionary with the following keys is expected:
@@ -387,12 +403,21 @@ class FDTD_GRID:
         cbar = self.fig.colorbar( self.animation_obj['e_field'], ax=self.ax, orientation="vertical", fraction=0.012)
         cbar.set_label("Field Intensity", rotation=-90)
 
+        if(self.HAS_MAT):
+            ## Calculate Hight: 
+            height = self.mat_idx[3] - self.mat_idx[2]
+            width = self.mat_idx[1] - self.mat_idx[0]
+            rect = patches.Rectangle((3, 3), 10, 20, linewidth=5, facecolor='black')
+            self.ax[0].add_patch(rect)
+            
+            print("YE")
+
         self.fig.text(0.02, 0.5, 'Y [m]', ha='left', va='center', rotation='vertical') 
         self.fig.text(0.5, 0.02, 'X [mm]', ha='center', va='bottom')
         self.ax[0].set_title('E Field')
         self.ax[1].set_title(r'$H_x$')
         self.ax[2].set_title(r'$H_y$')
-        self.fig.tight_layout(rect=[0.02, 0.02, 0.85, 0.90])  #
+        #self.fig.tight_layout(rect=[0.02, 0.02, 0.85, 0.90])  #
 
     def update_1d(self, t, src_args):
         self.time_stepping_1d(t, src_args)
