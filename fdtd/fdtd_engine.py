@@ -84,11 +84,13 @@ class FDTD_GRID:
         if(self.dim == '2D'):
             self.logger.info(f"Courant Number: {self.Sc} -- In 2D best is: {1/np.sqrt(2)}")
             self.y_max = args["max_y"]
-            self.total_y = round(self.y_max/self.delta_x) ## FIXME: delta_y not calculated // add support for not nxn grids
+            self.delta_y = self.delta_x ## FIXME: delta_y not calculated // add support for not nxn grids
+            self.total_y = round(self.y_max/self.delta_y) 
             self.Y_PML_SIZE = 0
             self.mode_2d = args["2d_mode"]
             self.src_y_indx_strt = None
             self.src_y_indx_end = None
+            
            
         else:
             self.logger.info(f"Courant Number: {self.Sc} -- In 1D best is: 1")
@@ -191,14 +193,16 @@ class FDTD_GRID:
                 
     def set_PML(self):
         ## PML size set to 5% of dimension space on each side 
-        self.X_PML_SIZE = int(0.05*round(self.total_x))
+       
         
         if (self.dim == '2D'):
             '''
             FIXME: Only nxn simulation space supported rn
             '''
+            self.X_PML_SIZE = int(0.1*round(self.total_x))
             self.Y_PML_SIZE = self.X_PML_SIZE
-
+        else:
+            self.X_PML_SIZE = int(0.05*round(self.total_x))
           
     
     '''
@@ -218,20 +222,28 @@ class FDTD_GRID:
             ## Some initial guess for sigma_e 
             ## If sigma is too large causes a lot reflection from sim/PML boundary
             ## If sigma is too small causes a lot of reflection from PML/end boundary -- energy that eventually returns to the sim
-            self.sigma_e[:self.X_PML_SIZE] = initial_guess * (self.epsilon[self.X_PML_SIZE + 1]/eps_0) ## scaled by adjacent eps_r
-            self.sigma_e[-self.X_PML_SIZE:] = initial_guess * (self.epsilon[-self.X_PML_SIZE - 1]/eps_0)
-
+            self.sigma_e[:self.X_PML_SIZE] = initial_guess / (self.epsilon[self.X_PML_SIZE + 1]/eps_0) ## scaled by adjacent eps_r
+            self.sigma_e[-self.X_PML_SIZE:] = initial_guess / (self.epsilon[-self.X_PML_SIZE - 1]/eps_0)
+            
             ## sigma_m is calculated to match impedance
             self.sigma_m[:self.X_PML_SIZE] =  np.multiply(self.sigma_e[:self.X_PML_SIZE], np.divide(self.miu[:self.X_PML_SIZE],self.epsilon[:self.X_PML_SIZE]))
             self.sigma_m[-self.X_PML_SIZE:] =  np.multiply(self.sigma_e[-self.X_PML_SIZE:] , np.divide(self.miu[-self.X_PML_SIZE:],self.epsilon[-self.X_PML_SIZE:]))
+
+            ## matching epsilons and mius
+            self.epsilon[:self.X_PML_SIZE] = self.epsilon[self.X_PML_SIZE + 1]
+            self.epsilon[-self.X_PML_SIZE:] = self.epsilon[-self.X_PML_SIZE - 1]
+
+            self.miu[:self.X_PML_SIZE] = self.miu[self.X_PML_SIZE + 1]
+            self.miu[-self.X_PML_SIZE:] = self.miu[-self.X_PML_SIZE - 1]
+            
         else:
             ## sigma ex
-            self.sigma_e['x'][:,:self.X_PML_SIZE] = initial_guess * (self.epsilon[:,self.X_PML_SIZE+1]/eps_0).reshape(len(self.epsilon[:,self.X_PML_SIZE+1]), 1)
-            self.sigma_e['x'][:,-self.X_PML_SIZE:] =  initial_guess * (self.epsilon[:,-self.X_PML_SIZE -1]).reshape(len(self.epsilon[:,-self.X_PML_SIZE -1]), 1)
+            self.sigma_e['x'][:,:self.X_PML_SIZE] = initial_guess / (self.epsilon[:,self.X_PML_SIZE+1]/eps_0).reshape(len(self.epsilon[:,self.X_PML_SIZE+1]), 1)
+            self.sigma_e['x'][:,-self.X_PML_SIZE:] =  initial_guess / (self.epsilon[:,-self.X_PML_SIZE -1]/eps_0).reshape(len(self.epsilon[:,-self.X_PML_SIZE -1]), 1)
 
             ## sigma ey
-            self.sigma_e['y'][:self.Y_PML_SIZE,:] = initial_guess * (self.epsilon[self.Y_PML_SIZE+1,:]/eps_0).reshape(1, len(self.epsilon[:,self.Y_PML_SIZE+1]))
-            self.sigma_e['y'][-self.X_PML_SIZE:,:] =  initial_guess * (self.epsilon[-self.Y_PML_SIZE -1,:]).reshape(1, len(self.epsilon[:,-self.Y_PML_SIZE -1]))
+            self.sigma_e['y'][:self.Y_PML_SIZE,:] = initial_guess / (self.epsilon[self.Y_PML_SIZE+1,:]/eps_0).reshape(1, len(self.epsilon[:,self.Y_PML_SIZE+1]))
+            self.sigma_e['y'][-self.X_PML_SIZE:,:] =  initial_guess / (self.epsilon[-self.Y_PML_SIZE -1,:]/eps_0).reshape(1, len(self.epsilon[:,-self.Y_PML_SIZE -1]))
             
             ## sigma m should match impedance
             self.sigma_m['x'][:,:self.X_PML_SIZE] = np.multiply(self.sigma_e['x'][:,:self.X_PML_SIZE], np.divide(self.miu[:,:self.X_PML_SIZE], self.epsilon[:,:self.X_PML_SIZE]))
@@ -240,7 +252,12 @@ class FDTD_GRID:
             self.sigma_m['y'][:self.Y_PML_SIZE,:] = np.multiply(self.sigma_e['y'][:self.Y_PML_SIZE,:], np.divide(self.miu[:self.Y_PML_SIZE,:], self.epsilon[:self.Y_PML_SIZE,:]))
             self.sigma_m['y'][-self.X_PML_SIZE:,:] = np.multiply(self.sigma_e['y'][-self.X_PML_SIZE:,:], np.divide(self.miu[-self.X_PML_SIZE:,:], self.epsilon[-self.X_PML_SIZE:,:]))
             
-            
+            for mat_prop in (self.epsilon, self.miu):
+                mat_prop[:,:self.X_PML_SIZE] = mat_prop[:,self.X_PML_SIZE+1].reshape(len(mat_prop[:,self.X_PML_SIZE+1]), 1)
+                mat_prop[:,-self.X_PML_SIZE:] = mat_prop[:,-self.X_PML_SIZE -1].reshape(len(mat_prop[:,-self.X_PML_SIZE -1]), 1)
+                mat_prop[:self.Y_PML_SIZE,:] =  mat_prop[self.Y_PML_SIZE+1,:].reshape(1, len(mat_prop[:,self.Y_PML_SIZE+1]))
+                mat_prop[-self.X_PML_SIZE:,:] = mat_prop[-self.Y_PML_SIZE -1,:].reshape(1, len(self.epsilon[:,-self.Y_PML_SIZE -1]))
+
         self.state = 'PML'
         
 
@@ -348,7 +365,7 @@ class FDTD_GRID:
             self.coef = {'Chxh': np.divide(1-np.divide(self.sigma_m*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)),
                       'Chxe': np.multiply(1/(1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/(self.miu)),
                       'Chyh': np.divide(1-np.divide(self.sigma_m*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)),
-                      'Chye': np.multiply(1/(1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/self.miu),
+                      'Chye': np.multiply(1/(1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/(self.miu)),
                       'Ceze': np.divide(1-np.divide(self.delta_t*self.sigma_e, 2*self.epsilon), 1+np.divide(self.delta_t*self.sigma_e,2*self.epsilon)),
                       'Cezh': np.multiply(1/(1+np.divide(self.sigma_e*self.delta_t, 2*self.epsilon)), (self.delta_t/self.delta_x)/self.epsilon)
                        }
@@ -422,23 +439,16 @@ class FDTD_GRID:
         self.H['Hy'][:,-1] = 0
     
     def tmz_update_e_pml(self, t, src_args):
-        self.E['Ezx'][:,1:-1] = np.multiply(self.coef['Cezxe'][:,1:-1], self.E['Ezx'][:,1:-1]) + np.multiply(self.coef['Cezxh'][:,1:-1], (self.H['Hy'][:,2:] - self.H['Hy'][:,:-2]))
+        self.E['Ezx'][:,1:] = np.multiply(self.coef['Cezxe'][:,1:], self.E['Ezx'][:,1:]) + np.multiply(self.coef['Cezxh'][:,1:], (self.H['Hy'][:,1:] - self.H['Hy'][:,:-1]))
         
         ## zero (first) column x=0 
         self.E['Ezx'][:,0] = 0
-        ## last column (X=M)
-        self.E['Ezx'][:,-1] = 0
 
-        self.E['Ezy'][1:-1,:] = np.multiply(self.coef['Cezye'][1:-1,:], self.E['Ezy'][1:-1,:]) + np.multiply(self.coef['Cezyh'][1:-1,:], (self.H['Hx'][2:,:]-self.H['Hx'][:-2,:]))
 
+        self.E['Ezy'][1:,:] = np.multiply(self.coef['Cezye'][1:,:], self.E['Ezy'][1:,:]) - np.multiply(self.coef['Cezyh'][1:,:], (self.H['Hx'][1:,:]-self.H['Hx'][:-1,:]))
         ## zero (firs) row (Y = 0)
         self.E['Ezy'][0,:] = 0
-        ## last row (Y=N)
-        self.E['Ezy'][-1,:] = 0
-        
-        # self.E['Ezx'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E['Ezx'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
-        # self.E['Ezy'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E['Ezy'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
-        
+    
         ## update Ez = Ezx + Ezy
         self.E['Ez'] = self.E['Ezx'] + self.E['Ezy']
 
@@ -447,9 +457,9 @@ class FDTD_GRID:
         self.E['Ez'][1:,1:] = np.multiply(self.coef['Ceze'][1:,1:], self.E['Ez'][1:,1:]) + np.multiply(self.coef['Cezh'][1:,1:], ((self.H['Hy'][1:,1:] - self.H['Hy'][1:,:-1]) - (self.H['Hx'][1:,1:] - self.H['Hx'][:-1,1:])))
         ## set first row (Y=0) to zero
         ## set first column (X=0) to zero
-        self.E['Ez'][1,:] = 0
-        self.E[:,0] = 0
-
+        self.E['Ez'][0,:] = 0
+        self.E['Ez'][:,0] = 0
+        
     def time_stepping_2d_tmz(self, t, src_args):
        
         self.tmz_update_h()
@@ -481,10 +491,11 @@ class FDTD_GRID:
         
         self.fig, self.ax = plt.subplots(1,3, figsize=(15, 5))   ## axes are 1 row 3 cols  
         txt_ax =  self.fig.add_axes([0, 0, 1, 1], frameon=False) # Invisible axes over entire figure
+        bound_box = [-(self.X_PML_SIZE * self.delta_x), self.x_max + (self.X_PML_SIZE * self.delta_x), -(self.Y_PML_SIZE * self.delta_y), self.y_max + (self.Y_PML_SIZE * self.delta_y)]
         self.animation_obj['time_txt'] = txt_ax.text(0.5, 0.9, '', transform=txt_ax.transAxes, fontsize=12, color='red')
-        self.animation_obj['e_field'] = self.ax[0].imshow(self.E['Ez'], cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1],  extent=[0, self.x_max, 0, self.y_max])
-        self.animation_obj['hx_field'] = self.ax[1].imshow(np.multiply(self.H['Hx'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
-        self.animation_obj['hy_field'] = self.ax[2].imshow(np.multiply(self.H['Hy'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
+        self.animation_obj['e_field'] = self.ax[0].imshow(self.E['Ez'], cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1],  extent=bound_box)
+        self.animation_obj['hx_field'] = self.ax[1].imshow(np.multiply(self.H['Hx'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=bound_box)
+        self.animation_obj['hy_field'] = self.ax[2].imshow(np.multiply(self.H['Hy'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=bound_box)
         
         cbar = self.fig.colorbar( self.animation_obj['e_field'], ax=self.ax, orientation="vertical", fraction=0.012)
         cbar.set_label("Field Intensity", rotation=-90)
@@ -498,7 +509,25 @@ class FDTD_GRID:
                 for j in range(3):
                     self.animation_obj['material_drawings'].append(patches.Rectangle((mats[0], mats[2]), width, height, linewidth=5, facecolor=mats[4], zorder=10, alpha=0.4))
                     self.ax[j].add_patch(self.animation_obj['material_drawings'][3*i+j])
-                
+        
+        if(self.HAS_PML):
+            ## Horizontal PMLs 
+            height_h = self.Y_PML_SIZE * self.delta_y
+            width_h = self.x_max + 2*(self.X_PML_SIZE * self.delta_x)
+
+            ## Vertical PMLs 
+            height_v = self.y_max + 2*(self.Y_PML_SIZE * self.delta_y)
+            width_v = self.X_PML_SIZE * self.delta_x
+            
+            for i in range(3):
+                print((self.y_max-self.Y_PML_SIZE)*self.delta_x)
+                self.animation_obj['material_drawings'].append(patches.Rectangle((-self.X_PML_SIZE*self.delta_x,-self.Y_PML_SIZE*self.delta_y), width_h, height_h, linewidth=1, facecolor='gray', zorder=10,alpha=0.5))
+                self.animation_obj['material_drawings'].append(patches.Rectangle((-self.X_PML_SIZE*self.delta_x,self.y_max), width_h, height_h, linewidth=1, facecolor='gray', zorder=10,alpha=0.5))
+                self.animation_obj['material_drawings'].append(patches.Rectangle((-self.X_PML_SIZE*self.delta_x,-self.Y_PML_SIZE*self.delta_y), width_v, height_v, linewidth=1, facecolor='gray', zorder=10,alpha=0.5))
+                self.animation_obj['material_drawings'].append(patches.Rectangle((self.x_max,-self.Y_PML_SIZE*self.delta_y), width_v, height_v, linewidth=1, facecolor='gray', zorder=10,alpha=0.5))
+                for j in range(4):
+                    self.ax[i].add_patch(self.animation_obj['material_drawings'][-j-1])
+               
             
         self.fig.text(0.02, 0.5, 'Y [m]', ha='left', va='center', rotation='vertical') 
         self.fig.text(0.5, 0.02, 'X [mm]', ha='center', va='bottom')

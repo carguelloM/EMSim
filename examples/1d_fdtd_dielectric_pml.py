@@ -50,7 +50,7 @@ if __name__=="__main__":
                 }
     myGrid.add_material(mat_args)
     ## 3. PML
-    init_guess = 3
+    init_guess = 2.5
     myGrid.PML_apply(init_guess)
     ## 4. Calculate Coefficients
     myGrid.coeff_calculation()

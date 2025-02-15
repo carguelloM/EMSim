@@ -1,11 +1,2 @@
-# Created by venv; see https://docs.python.org/3/library/venv.htmdd*
-bin/
-lib/
-share/
-include/
-pyvenv.cfg
-fdtd/__pycache__/
-examples/__pycache__/
-.DS_Store
-sims/.DS_Store
-poetry.lock
+# Created by venv; see https://docs.python.org/3/library/venv.html
+*

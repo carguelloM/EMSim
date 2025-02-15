@@ -49,7 +49,7 @@ if __name__=="__main__":
     ## 2. NO materials
 
     ## 3. PML
-    init_guess = 3
+    init_guess = 9
     myGrid.PML_apply(init_guess)
     ## 4. Calculate Coefficients
     
