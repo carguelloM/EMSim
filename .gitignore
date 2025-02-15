@@ -4,6 +4,8 @@ lib/
 share/
 include/
 pyvenv.cfg
-classes/__pycache__/
+fdtd/__pycache__/
+examples/__pycache__/
 .DS_Store
 sims/.DS_Store
+poetry.lock

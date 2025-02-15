@@ -71,7 +71,7 @@ class FDTD_GRID:
         self.E = None
         self.H = None
         self.update_eq = None ## Function used to update equations
-        
+        self.time_stepping_fn = None
         
         ## coefficients
         self.coef = None
@@ -126,12 +126,21 @@ class FDTD_GRID:
             self.sigma_e = np.zeros(vec_size)
             self.sigma_m = np.zeros(vec_size)
         else:
-            vec_size_x = self.total_x + 2*self.Y_PML_SIZE
+            vec_size_x = self.total_x + 2*self.X_PML_SIZE
             vec_size_y = self.total_y +  2*self.Y_PML_SIZE
             self.epsilon = np.ones((vec_size_x, vec_size_y)) * eps_0
             self.miu = np.ones((vec_size_x, vec_size_y)) * miu_0
-            self.sigma_e = np.zeros((vec_size_x, vec_size_y))
-            self.sigma_m = np.zeros((vec_size_x, vec_size_y))
+
+            ## for split PML we need two versions
+            if(self.HAS_PML):
+                self.sigma_e={'x': np.zeros((vec_size_x, vec_size_y)), ## for waves propagating in x direction
+                              'y':  np.zeros((vec_size_x, vec_size_y))} ## for waves propagating in y direction
+                self.sigma_m={'x': np.zeros((vec_size_x, vec_size_y)), ## for waves propagating in x direction
+                              'y':  np.zeros((vec_size_x, vec_size_y))} ## for waves propagating in y direction
+            ## No PML we are good with one
+            else:
+                self.sigma_e = np.zeros((vec_size_x, vec_size_y))
+                self.sigma_m = np.zeros((vec_size_x, vec_size_y))
 
     '''
     Transverse Magnetic Mode Assumptions:
@@ -142,9 +151,20 @@ class FDTD_GRID:
     The selection of xy for propagation is arbitrary!
     '''
     def set_tmz_fields(self):
-        self.E = np.zeros((self.total_x + 2*self.X_PML_SIZE,self.total_x + 2*self.Y_PML_SIZE))
-        self.H = {'Hx': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE)),
-                  'Hy': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE))}
+
+        ## for split PML Ez has to be split in two parts a x traveling component and a y traveling component Ez = Ez_x + Ez_y
+        if(self.HAS_PML):
+            self.E = {'Ez': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE)),
+                       'Ezx': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE)),
+                       'Ezy': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE))}
+            self.H = {'Hx': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE)),
+                       'Hy': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE))}
+        else:
+            self.E = {'Ez':np.zeros((self.total_x + 2*self.X_PML_SIZE,self.total_x + 2*self.Y_PML_SIZE))}
+            self.H = {'Hx': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE)),
+                       'Hy': np.zeros((self.total_x + 2*self.X_PML_SIZE, self.total_x + 2*self.Y_PML_SIZE))}
+        
+        
         
     '''
      1D wave Assumptions
@@ -172,14 +192,13 @@ class FDTD_GRID:
     def set_PML(self):
         ## PML size set to 5% of dimension space on each side 
         self.X_PML_SIZE = int(0.05*round(self.total_x))
-        self.X_PML_START = -self.X_PML_SIZE * self.delta_x
-        self.X_PML_END = self.x_max + (self.X_PML_SIZE * self.delta_x)
         
         if (self.dim == '2D'):
             '''
             FIXME: Only nxn simulation space supported rn
             '''
             self.Y_PML_SIZE = self.X_PML_SIZE
+
           
     
     '''
@@ -206,9 +225,24 @@ class FDTD_GRID:
             self.sigma_m[:self.X_PML_SIZE] =  np.multiply(self.sigma_e[:self.X_PML_SIZE], np.divide(self.miu[:self.X_PML_SIZE],self.epsilon[:self.X_PML_SIZE]))
             self.sigma_m[-self.X_PML_SIZE:] =  np.multiply(self.sigma_e[-self.X_PML_SIZE:] , np.divide(self.miu[-self.X_PML_SIZE:],self.epsilon[-self.X_PML_SIZE:]))
         else:
-            self.logger.critical("2D PML not implemented yet!")
-        
+            ## sigma ex
+            self.sigma_e['x'][:,:self.X_PML_SIZE] = initial_guess * (self.epsilon[:,self.X_PML_SIZE+1]/eps_0).reshape(len(self.epsilon[:,self.X_PML_SIZE+1]), 1)
+            self.sigma_e['x'][:,-self.X_PML_SIZE:] =  initial_guess * (self.epsilon[:,-self.X_PML_SIZE -1]).reshape(len(self.epsilon[:,-self.X_PML_SIZE -1]), 1)
+
+            ## sigma ey
+            self.sigma_e['y'][:self.Y_PML_SIZE,:] = initial_guess * (self.epsilon[self.Y_PML_SIZE+1,:]/eps_0).reshape(1, len(self.epsilon[:,self.Y_PML_SIZE+1]))
+            self.sigma_e['y'][-self.X_PML_SIZE:,:] =  initial_guess * (self.epsilon[-self.Y_PML_SIZE -1,:]).reshape(1, len(self.epsilon[:,-self.Y_PML_SIZE -1]))
+            
+            ## sigma m should match impedance
+            self.sigma_m['x'][:,:self.X_PML_SIZE] = np.multiply(self.sigma_e['x'][:,:self.X_PML_SIZE], np.divide(self.miu[:,:self.X_PML_SIZE], self.epsilon[:,:self.X_PML_SIZE]))
+            self.sigma_m['x'][:,-self.X_PML_SIZE:] = np.multiply(self.sigma_e['x'][:,-self.X_PML_SIZE:], np.divide(self.miu[:,-self.X_PML_SIZE:], self.epsilon[:,-self.X_PML_SIZE:]))
+
+            self.sigma_m['y'][:self.Y_PML_SIZE,:] = np.multiply(self.sigma_e['y'][:self.Y_PML_SIZE,:], np.divide(self.miu[:self.Y_PML_SIZE,:], self.epsilon[:self.Y_PML_SIZE,:]))
+            self.sigma_m['y'][-self.X_PML_SIZE:,:] = np.multiply(self.sigma_e['y'][-self.X_PML_SIZE:,:], np.divide(self.miu[-self.X_PML_SIZE:,:], self.epsilon[-self.X_PML_SIZE:,:]))
+            
+            
         self.state = 'PML'
+        
 
     '''
     args should be a dictionary with the following keys
@@ -300,14 +334,25 @@ class FDTD_GRID:
         letter -> field being multiplied by this constant
         i.e., Chxh -> constant that multiplies H field in the Hx update equation
         '''
-        self.coef = { 'Chxh': np.divide(1-np.divide(self.sigma_m*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)),
+        if(self.HAS_PML):
+            self.coef = {'Chxh': np.divide(1-np.divide(self.sigma_m['y']*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m['y']*self.delta_t, 2*self.miu)),
+                         'Chxe': np.multiply(1/(1+np.divide(self.sigma_m['y']*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/(self.miu)),
+                         'Chyh': np.divide(1-np.divide(self.sigma_m['x']*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m['x']*self.delta_t, 2*self.miu)),
+                         'Chye': np.multiply(1/(1+np.divide(self.sigma_m['x']*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/self.miu),
+                         'Cezxe': np.divide(1-np.divide(self.delta_t*self.sigma_e['x'], 2*self.epsilon), 1+np.divide(self.delta_t*self.sigma_e['x'],2*self.epsilon)),
+                         'Cezxh': np.multiply(1/(1+np.divide(self.sigma_e['x']*self.delta_t, 2*self.epsilon)), (self.delta_t/self.delta_x)/self.epsilon),
+                         'Cezye': np.divide(1-np.divide(self.delta_t*self.sigma_e['y'], 2*self.epsilon), 1+np.divide(self.delta_t*self.sigma_e['y'],2*self.epsilon)),
+                         'Cezyh': np.multiply(1/(1+np.divide(self.sigma_e['y']*self.delta_t, 2*self.epsilon)), (self.delta_t/self.delta_x)/self.epsilon)
+                        }
+        else:
+            self.coef = {'Chxh': np.divide(1-np.divide(self.sigma_m*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)),
                       'Chxe': np.multiply(1/(1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/(self.miu)),
                       'Chyh': np.divide(1-np.divide(self.sigma_m*self.delta_t, 2*self.miu), 1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)),
                       'Chye': np.multiply(1/(1+np.divide(self.sigma_m*self.delta_t, 2*self.miu)), (self.delta_t/self.delta_x)/self.miu),
                       'Ceze': np.divide(1-np.divide(self.delta_t*self.sigma_e, 2*self.epsilon), 1+np.divide(self.delta_t*self.sigma_e,2*self.epsilon)),
                       'Cezh': np.multiply(1/(1+np.divide(self.sigma_e*self.delta_t, 2*self.epsilon)), (self.delta_t/self.delta_x)/self.epsilon)
-                      }
-
+                       }
+        print(self.coef['Chxh'].shape)
     '''
     This should be called after materials have been added and PML has been applied
     '''
@@ -357,33 +402,71 @@ class FDTD_GRID:
 
         ## add source term
         self.E[self.src_x_indx_strt:self.src_x_indx_end] = self.E[self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
-        
-    def time_stepping_2d_tmz(self, t, src_args):
-       
+    
+
+
+    ########################################### 2D Time Stepping ####################################################
+
+    '''
+    With and without PML H updates equations are the same so this function is shared by both
+    '''
+    def tmz_update_h(self):
         ## from Schneider book page 188 (code) -- Equation 8.10 in page 186
-        self.H['Hx'][:-1,:] =  np.multiply(self.coef['Chxh'][:-1,:], self.H['Hx'][:-1,:]) - np.multiply(self.coef['Chxe'][:-1, :],(self.E[1:,:] - self.E[:-1,:]))
+        self.H['Hx'][:-1,:] =  np.multiply(self.coef['Chxh'][:-1,:], self.H['Hx'][:-1,:]) - np.multiply(self.coef['Chxe'][:-1, :],(self.E['Ez'][1:,:] - self.E['Ez'][:-1,:]))
         ## set last row (y=N) to zero
         self.H['Hx'][-1,:] = 0
 
         ## from Schneider book page 188 (code) -- Equation 8.11 in page 186
-        self.H['Hy'][:,:-1] = np.multiply(self.coef['Chyh'][:,:-1], self.H['Hy'][:,:-1]) + np.multiply(self.coef['Chye'][:,:-1], (self.E[:,1:] - self.E[:,:-1]))
+        self.H['Hy'][:,:-1] = np.multiply(self.coef['Chyh'][:,:-1], self.H['Hy'][:,:-1]) + np.multiply(self.coef['Chye'][:,:-1], (self.E['Ez'][:,1:] - self.E['Ez'][:,:-1]))
         ## set last column (x=M) to zero
         self.H['Hy'][:,-1] = 0
+    
+    def tmz_update_e_pml(self, t, src_args):
+        self.E['Ezx'][:,1:-1] = np.multiply(self.coef['Cezxe'][:,1:-1], self.E['Ezx'][:,1:-1]) + np.multiply(self.coef['Cezxh'][:,1:-1], (self.H['Hy'][:,2:] - self.H['Hy'][:,:-2]))
+        
+        ## zero (first) column x=0 
+        self.E['Ezx'][:,0] = 0
+        ## last column (X=M)
+        self.E['Ezx'][:,-1] = 0
 
+        self.E['Ezy'][1:-1,:] = np.multiply(self.coef['Cezye'][1:-1,:], self.E['Ezy'][1:-1,:]) + np.multiply(self.coef['Cezyh'][1:-1,:], (self.H['Hx'][2:,:]-self.H['Hx'][:-2,:]))
+
+        ## zero (firs) row (Y = 0)
+        self.E['Ezy'][0,:] = 0
+        ## last row (Y=N)
+        self.E['Ezy'][-1,:] = 0
+        
+        # self.E['Ezx'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E['Ezx'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
+        # self.E['Ezy'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E['Ezy'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
+        
+        ## update Ez = Ezx + Ezy
+        self.E['Ez'] = self.E['Ezx'] + self.E['Ezy']
+
+    def tmz_update_e(self):
         ## from Schneider book page 188 (code) -- Equation 8.12 in page 188
-        self.E[1:,1:] = np.multiply(self.coef['Ceze'][1:,1:], self.E[1:,1:]) + np.multiply(self.coef['Cezh'][1:,1:], ((self.H['Hy'][1:,1:] - self.H['Hy'][1:,:-1]) - (self.H['Hx'][1:,1:] - self.H['Hx'][:-1,1:])))
+        self.E['Ez'][1:,1:] = np.multiply(self.coef['Ceze'][1:,1:], self.E['Ez'][1:,1:]) + np.multiply(self.coef['Cezh'][1:,1:], ((self.H['Hy'][1:,1:] - self.H['Hy'][1:,:-1]) - (self.H['Hx'][1:,1:] - self.H['Hx'][:-1,1:])))
         ## set first row (Y=0) to zero
         ## set first column (X=0) to zero
-        self.E[1,:] = 0
-        self.E[:,1] = 0
+        self.E['Ez'][1,:] = 0
+        self.E[:,0] = 0
+
+    def time_stepping_2d_tmz(self, t, src_args):
+       
+        self.tmz_update_h()
+
+        if(self.HAS_PML):
+            self.tmz_update_e_pml(t, src_args)
+        else:
+            self.tmz_update_e()
 
         ## add source term
-        self.E[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
+        self.E['Ez'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] = self.E['Ez'][self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end] + (self.delta_t/self.epsilon[self.src_y_indx_strt:self.src_y_indx_end, self.src_x_indx_strt:self.src_x_indx_end])*self.src_func(t, **src_args)
         
+
     def update_2d(self, t, src_args):
         self.time_stepping_2d_tmz(t, src_args)
         if(int(t/self.delta_t) % self.stride == 0):
-            self.animation_obj['e_field'].set_array(self.E)
+            self.animation_obj['e_field'].set_array(self.E['Ez'])
             self.animation_obj['hx_field'].set_array(np.multiply(self.eta,self.H['Hx']))
             self.animation_obj['hy_field'].set_array(np.multiply(self.eta,self.H['Hy']))
             self.animation_obj['time_txt'].set_text(f"t = {t*1e12:.2f} ps")
@@ -399,7 +482,7 @@ class FDTD_GRID:
         self.fig, self.ax = plt.subplots(1,3, figsize=(15, 5))   ## axes are 1 row 3 cols  
         txt_ax =  self.fig.add_axes([0, 0, 1, 1], frameon=False) # Invisible axes over entire figure
         self.animation_obj['time_txt'] = txt_ax.text(0.5, 0.9, '', transform=txt_ax.transAxes, fontsize=12, color='red')
-        self.animation_obj['e_field'] = self.ax[0].imshow(self.E, cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1],  extent=[0, self.x_max, 0, self.y_max])
+        self.animation_obj['e_field'] = self.ax[0].imshow(self.E['Ez'], cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1],  extent=[0, self.x_max, 0, self.y_max])
         self.animation_obj['hx_field'] = self.ax[1].imshow(np.multiply(self.H['Hx'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
         self.animation_obj['hy_field'] = self.ax[2].imshow(np.multiply(self.H['Hy'], self.eta), cmap='plasma', animated=True, vmin=amp_range[0], vmax=amp_range[1], extent=[0, self.x_max, 0, self.y_max])
         
